@@ -29,8 +29,8 @@ export function IndexingPipeline() {
   const { startIndexing } = useIndexingPipeline()
   const store = useIndexingStore()
   const [config, setConfig] = useState<ChunkingConfig>({
-    chunkSize: 200,
-    overlap: 40,
+    chunkSize: 100,
+    overlap: 20,
   })
   const [highlightChunk, setHighlightChunk] = useState<number | null>(null)
   const [storeKey, setStoreKey] = useState(0)

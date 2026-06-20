@@ -53,7 +53,7 @@ export function EmbeddingProgress({ statuses }: Props) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-700">
-                  Chunk {s.chunkIndex + 1}
+                  Chunk {s.chunkIndex + 1} ({s.text.split(/\s+/).filter(Boolean).length} mots)
                 </span>
                 {s.status === 'loading' && (
                   <span className="text-blue-500">Appel en cours…</span>

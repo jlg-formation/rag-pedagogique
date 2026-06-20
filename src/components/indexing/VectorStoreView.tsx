@@ -47,8 +47,8 @@ export function VectorStoreView() {
                 {doc.name}
               </p>
               <p className="text-xs text-gray-400">
-                {doc.chunkCount} chunks · taille {doc.chunkingConfig.chunkSize}t
-                · overlap {doc.chunkingConfig.overlap}t ·{' '}
+                {doc.chunkCount} chunks · taille {doc.chunkingConfig.chunkSize} mots
+                · overlap {doc.chunkingConfig.overlap} mots ·{' '}
                 {new Date(doc.createdAt).toLocaleTimeString('fr-FR')}
               </p>
             </div>

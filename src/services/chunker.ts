@@ -1,7 +1,11 @@
 import type { ChunkCandidate, ChunkingConfig } from '../types'
 
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.split(/\s+/).filter(Boolean).length * 1.3)
+  return Math.ceil(countWords(text) * 1.3)
+}
+
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length
 }
 
 export function splitIntoChunks(
@@ -11,45 +15,50 @@ export function splitIntoChunks(
   const { chunkSize, overlap } = config
   const chunks: ChunkCandidate[] = []
 
-  const totalTokens = estimateTokens(text)
-  const avgCharsPerToken = totalTokens > 0 ? text.length / totalTokens : 4
-  const targetChars = Math.round(chunkSize * avgCharsPerToken)
-  const overlapChars = Math.round(overlap * avgCharsPerToken)
+  // Build an index: word i → character offset where it starts
+  const wordOffsets: number[] = []
+  const wordRegex = /\S+/g
+  let match: RegExpExecArray | null
+  while ((match = wordRegex.exec(text)) !== null) {
+    wordOffsets.push(match.index)
+  }
 
-  let pos = 0
+  const totalWords = wordOffsets.length
+  if (totalWords === 0) return []
+
+  // wordEnd(i) = char offset just after the last char of word i
+  function wordEnd(i: number): number {
+    const nextStart = i + 1 < totalWords ? wordOffsets[i + 1] : text.length
+    // walk back any trailing whitespace so endChar is tight
+    let end = nextStart
+    while (end > wordOffsets[i] && /\s/.test(text[end - 1])) end--
+    return end
+  }
+
+  let startWord = 0
   let index = 0
 
-  while (pos < text.length) {
-    let end = Math.min(pos + targetChars, text.length)
+  while (startWord < totalWords) {
+    // Last chunk takes whatever remains
+    const endWord = Math.min(startWord + chunkSize, totalWords) - 1
+    const startChar = wordOffsets[startWord]
+    const endChar = wordEnd(endWord)
+    const chunkText = text.slice(startChar, endChar)
 
-    // Try to end at a natural break (sentence or paragraph end)
-    if (end < text.length) {
-      const lookback = Math.round(targetChars * 0.25)
-      const searchFrom = Math.max(pos, end - lookback)
-      const segment = text.slice(searchFrom, end)
-      const breakMatch = segment.match(/[.!?\n]\s*/)
-      if (breakMatch && breakMatch.index !== undefined) {
-        end = searchFrom + breakMatch.index + breakMatch[0].length
-      }
-    }
+    chunks.push({
+      text: chunkText,
+      startChar,
+      endChar,
+      tokenCount: countWords(chunkText),
+      index,
+    })
+    index++
 
-    const chunkText = text.slice(pos, end).trim()
-    if (chunkText.length > 0) {
-      chunks.push({
-        text: chunkText,
-        startChar: pos,
-        endChar: end,
-        tokenCount: estimateTokens(chunkText),
-        index,
-      })
-      index++
-    }
+    if (endWord >= totalWords - 1) break
 
-    const nextPos = end - overlapChars
-    // Prevent infinite loop: always advance at least 10 chars
-    pos = Math.max(nextPos, pos + 10)
-
-    if (pos >= text.length) break
+    // Advance by (chunkSize - overlap) words, minimum 1
+    const step = Math.max(1, chunkSize - overlap)
+    startWord += step
   }
 
   return chunks

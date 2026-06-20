@@ -77,7 +77,7 @@ export function DocumentInput({ onSubmit, disabled }: Props) {
         />
         {text && (
           <div className="absolute bottom-2 right-3 text-xs text-gray-400">
-            {text.length} car. · ~{tokenCount} tokens
+            {text.length} car. · ~{tokenCount} mots
           </div>
         )}
       </div>

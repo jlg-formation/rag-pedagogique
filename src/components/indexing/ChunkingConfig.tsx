@@ -17,14 +17,14 @@ export function ChunkingConfigPanel({ config, onChange, disabled }: Props) {
         <div className="mb-1 flex justify-between text-xs text-gray-600">
           <span>Taille des chunks</span>
           <span className="font-mono font-bold text-blue-600">
-            ~{config.chunkSize} tokens
+            {config.chunkSize} mots
           </span>
         </div>
         <input
           type="range"
-          min={50}
-          max={500}
-          step={25}
+          min={10}
+          max={300}
+          step={5}
           value={config.chunkSize}
           disabled={disabled}
           onChange={(e) =>
@@ -33,8 +33,8 @@ export function ChunkingConfigPanel({ config, onChange, disabled }: Props) {
           className="w-full accent-blue-600"
         />
         <div className="mt-0.5 flex justify-between text-xs text-gray-400">
-          <span>50</span>
-          <span>500</span>
+          <span>10</span>
+          <span>300</span>
         </div>
       </div>
 
@@ -42,14 +42,14 @@ export function ChunkingConfigPanel({ config, onChange, disabled }: Props) {
         <div className="mb-1 flex justify-between text-xs text-gray-600">
           <span>Recouvrement (overlap)</span>
           <span className="font-mono font-bold text-purple-600">
-            ~{config.overlap} tokens
+            {config.overlap} mots
           </span>
         </div>
         <input
           type="range"
           min={0}
           max={Math.floor(config.chunkSize / 2)}
-          step={10}
+          step={5}
           value={config.overlap}
           disabled={disabled}
           onChange={(e) =>
@@ -64,8 +64,9 @@ export function ChunkingConfigPanel({ config, onChange, disabled }: Props) {
       </div>
 
       <p className="mt-3 text-xs text-gray-400">
-        Le recouvrement permet à des informations situées à la frontière entre
-        deux chunks de ne pas être perdues lors de la recherche.
+        Chaque chunk (sauf le dernier) contient exactement{' '}
+        <strong>{config.chunkSize}</strong> mots. Le recouvrement reprend les{' '}
+        <strong>{config.overlap}</strong> derniers mots du chunk précédent.
       </p>
     </div>
   )

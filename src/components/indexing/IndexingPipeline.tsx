@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useIndexingStore } from '../../stores/indexingStore'
 import { useIndexingPipeline } from '../../hooks/useIndexingPipeline'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -8,6 +8,7 @@ import { ChunkVisualizer } from './ChunkVisualizer'
 import { EmbeddingProgress } from './EmbeddingProgress'
 import { VectorStoreView } from './VectorStoreView'
 import { PipelineStep } from '../shared/PipelineStep'
+import { getDocuments } from '../../services/vectorStore'
 import type { ChunkingConfig } from '../../types'
 
 function stepStatus(
@@ -34,6 +35,18 @@ export function IndexingPipeline() {
   })
   const [highlightChunk, setHighlightChunk] = useState<number | null>(null)
   const [storeKey, setStoreKey] = useState(0)
+
+  useEffect(() => {
+    if (store.step === 'IDLE') {
+      getDocuments().then((docs) => {
+        if (docs.length > 0) {
+          store.setStep('DONE')
+          const total = docs.reduce((s, d) => s + d.chunkCount, 0)
+          store.setTotalIndexed(total)
+        }
+      })
+    }
+  }, [])
 
   const isRunning = ['CHUNKING', 'CHUNKED', 'EMBEDDING'].includes(store.step)
 

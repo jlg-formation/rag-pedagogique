@@ -22,6 +22,7 @@ interface IndexingState {
   ) => void
   setError: (error: string) => void
   incrementIndexed: () => void
+  setTotalIndexed: (n: number) => void
   reset: () => void
 }
 
@@ -55,11 +56,13 @@ export const useIndexingStore = create<IndexingState>()((set) => ({
   setError: (error) => set({ error, step: 'ERROR' }),
   incrementIndexed: () =>
     set((state) => ({ totalIndexed: state.totalIndexed + 1 })),
+  setTotalIndexed: (n) => set({ totalIndexed: n }),
   reset: () =>
     set({
       step: 'IDLE',
       chunks: [],
       embeddingStatuses: [],
       error: null,
+      totalIndexed: 0,
     }),
 }))

@@ -6,7 +6,7 @@ interface Props {
 }
 
 export function ApiKeyModal({ onClose }: Props) {
-  const { apiKey, setApiKey, chatModel, setChatModel, topK, setTopK } =
+  const { apiKey, setApiKey, chatModel, setChatModel, topK, setTopK, selfRagEnabled, setSelfRagEnabled } =
     useSettingsStore()
   const [draft, setDraft] = useState(apiKey)
 
@@ -56,8 +56,23 @@ export function ApiKeyModal({ onClose }: Props) {
           max={8}
           value={topK}
           onChange={(e) => setTopK(Number(e.target.value))}
-          className="mb-6 w-full accent-blue-600"
+          className="mb-4 w-full accent-blue-600"
         />
+
+        <label className="mb-6 flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+          <input
+            type="checkbox"
+            checked={selfRagEnabled}
+            onChange={(e) => setSelfRagEnabled(e.target.checked)}
+            className="mt-0.5 h-4 w-4 cursor-pointer accent-blue-600"
+          />
+          <div>
+            <p className="text-sm font-medium text-gray-700">Self-RAG</p>
+            <p className="text-xs text-gray-500">
+              Évaluation LLM de la pertinence des chunks et de la fidélité de la réponse.
+            </p>
+          </div>
+        </label>
 
         <div className="flex justify-end gap-3">
           <button

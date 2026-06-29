@@ -11,10 +11,26 @@ export type QueryStep =
   | 'EMBEDDING_QUERY'
   | 'SIMILARITY'
   | 'RETRIEVING'
+  | 'SELF_RAG_RELEVANCE'
   | 'BUILDING_PROMPT'
   | 'STREAMING'
+  | 'SELF_RAG_FAITHFULNESS'
   | 'DONE'
   | 'ERROR'
+
+export type RelevanceVerdict = 'RELEVANT' | 'PARTIAL' | 'IRRELEVANT'
+export type FaithfulnessVerdict = 'SUPPORTED' | 'PARTIAL' | 'UNSUPPORTED'
+
+export interface ChunkRelevanceResult {
+  chunkId: number
+  verdict: RelevanceVerdict
+  reasoning: string
+}
+
+export interface FaithfulnessResult {
+  verdict: FaithfulnessVerdict
+  reasoning: string
+}
 
 export type EmbeddingStatus = 'pending' | 'loading' | 'done' | 'error'
 

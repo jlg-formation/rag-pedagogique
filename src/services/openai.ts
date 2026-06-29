@@ -23,6 +23,32 @@ export async function createEmbedding(
   return new Float32Array(data.data[0].embedding)
 }
 
+export async function chatCompletion(
+  messages: { role: string; content: string }[],
+  apiKey: string,
+  model: string,
+): Promise<string> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, messages, stream: false }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(
+      (err as { error?: { message?: string } })?.error?.message ??
+        `Erreur OpenAI ${res.status}`,
+    )
+  }
+  const data = (await res.json()) as {
+    choices: { message: { content: string } }[]
+  }
+  return data.choices[0].message.content
+}
+
 export async function* streamChatCompletion(
   messages: { role: string; content: string }[],
   apiKey: string,

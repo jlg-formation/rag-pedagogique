@@ -7,6 +7,8 @@ import { SimilaritySearch } from './SimilaritySearch'
 import { RetrievedChunks } from './RetrievedChunks'
 import { PromptBuilder } from './PromptBuilder'
 import { LLMResponse } from './LLMResponse'
+import { SelfRagRelevance } from './SelfRagRelevance'
+import { SelfRagFaithfulness } from './SelfRagFaithfulness'
 import { PipelineStep } from '../shared/PipelineStep'
 
 type Step = string
@@ -23,7 +25,20 @@ function stepStatus(
   return 'done'
 }
 
-const ORDERED = [
+const ORDERED_WITH_SELF_RAG = [
+  'IDLE',
+  'EMBEDDING_QUERY',
+  'SIMILARITY',
+  'RETRIEVING',
+  'SELF_RAG_RELEVANCE',
+  'BUILDING_PROMPT',
+  'STREAMING',
+  'SELF_RAG_FAITHFULNESS',
+  'DONE',
+  'ERROR',
+]
+
+const ORDERED_WITHOUT_SELF_RAG = [
   'IDLE',
   'EMBEDDING_QUERY',
   'SIMILARITY',
@@ -37,14 +52,18 @@ const ORDERED = [
 export function QueryPipeline() {
   const { startQuery } = useQueryPipeline()
   const store = useQueryStore()
-  const { apiKey, chatModel, topK } = useSettingsStore()
+  const { apiKey, chatModel, topK, selfRagEnabled } = useSettingsStore()
+
+  const ORDERED = selfRagEnabled ? ORDERED_WITH_SELF_RAG : ORDERED_WITHOUT_SELF_RAG
 
   const isRunning = [
     'EMBEDDING_QUERY',
     'SIMILARITY',
     'RETRIEVING',
+    'SELF_RAG_RELEVANCE',
     'BUILDING_PROMPT',
     'STREAMING',
+    'SELF_RAG_FAITHFULNESS',
   ].includes(store.step)
 
   function handleQuery(question: string) {
@@ -56,6 +75,11 @@ export function QueryPipeline() {
   }
 
   const s = store.step
+
+  const promptChunks =
+    selfRagEnabled && store.filteredChunks.length > 0
+      ? store.filteredChunks
+      : store.retrievedChunks
 
   return (
     <div className="space-y-4">
@@ -100,25 +124,44 @@ export function QueryPipeline() {
 
           <div className="flex justify-center text-gray-300">▼</div>
 
-          {/* Step 4 */}
+          {/* Step 4 — Self-RAG relevance (conditionnel) */}
+          {selfRagEnabled && (
+            <>
+              <PipelineStep
+                number={4}
+                title="Self-RAG — Pertinence des chunks"
+                status={stepStatus(s, ORDERED, 'SELF_RAG_RELEVANCE')}
+              >
+                <SelfRagRelevance
+                  chunks={store.retrievedChunks}
+                  results={store.relevanceResults}
+                  filteredChunks={store.filteredChunks}
+                  isLoading={s === 'SELF_RAG_RELEVANCE'}
+                />
+              </PipelineStep>
+              <div className="flex justify-center text-gray-300">▼</div>
+            </>
+          )}
+
+          {/* Step 4 ou 5 — Construction du prompt */}
           <PipelineStep
-            number={4}
+            number={selfRagEnabled ? 5 : 4}
             title="Construction du prompt augmenté"
             status={stepStatus(s, ORDERED, 'BUILDING_PROMPT')}
           >
-            {store.retrievedChunks.length > 0 && (
+            {promptChunks.length > 0 && (
               <PromptBuilder
                 query={store.query}
-                chunks={store.retrievedChunks}
+                chunks={promptChunks}
               />
             )}
           </PipelineStep>
 
           <div className="flex justify-center text-gray-300">▼</div>
 
-          {/* Step 5 */}
+          {/* Step 5 ou 6 — Réponse du LLM */}
           <PipelineStep
-            number={5}
+            number={selfRagEnabled ? 6 : 5}
             title="Réponse du LLM"
             status={stepStatus(s, ORDERED, 'STREAMING')}
           >
@@ -128,6 +171,23 @@ export function QueryPipeline() {
               model={chatModel}
             />
           </PipelineStep>
+
+          {/* Step 7 — Self-RAG faithfulness (conditionnel) */}
+          {selfRagEnabled && (
+            <>
+              <div className="flex justify-center text-gray-300">▼</div>
+              <PipelineStep
+                number={7}
+                title="Self-RAG — Fidélité de la réponse"
+                status={stepStatus(s, ORDERED, 'SELF_RAG_FAITHFULNESS')}
+              >
+                <SelfRagFaithfulness
+                  result={store.faithfulnessResult}
+                  isLoading={s === 'SELF_RAG_FAITHFULNESS'}
+                />
+              </PipelineStep>
+            </>
+          )}
 
           {store.step === 'ERROR' && store.error && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">

@@ -1,5 +1,11 @@
 import { create } from 'zustand'
-import type { QueryStep, ScoredChunk, EmbeddingRecord } from '../types'
+import type {
+  QueryStep,
+  ScoredChunk,
+  EmbeddingRecord,
+  ChunkRelevanceResult,
+  FaithfulnessResult,
+} from '../types'
 
 interface QueryState {
   step: QueryStep
@@ -7,6 +13,9 @@ interface QueryState {
   queryVector: Float32Array | null
   allScores: { chunkId: number; score: number; text: string }[]
   retrievedChunks: ScoredChunk[]
+  relevanceResults: ChunkRelevanceResult[]
+  filteredChunks: ScoredChunk[]
+  faithfulnessResult: FaithfulnessResult | null
   streamedResponse: string
   error: string | null
   allEmbeddings: EmbeddingRecord[]
@@ -17,6 +26,9 @@ interface QueryState {
   setAllEmbeddings: (embeddings: EmbeddingRecord[]) => void
   addScore: (entry: { chunkId: number; score: number; text: string }) => void
   setRetrievedChunks: (chunks: ScoredChunk[]) => void
+  addRelevanceResult: (result: ChunkRelevanceResult) => void
+  setFilteredChunks: (chunks: ScoredChunk[]) => void
+  setFaithfulnessResult: (result: FaithfulnessResult) => void
   appendToken: (token: string) => void
   setError: (error: string) => void
   reset: () => void
@@ -28,6 +40,9 @@ export const useQueryStore = create<QueryState>()((set) => ({
   queryVector: null,
   allScores: [],
   retrievedChunks: [],
+  relevanceResults: [],
+  filteredChunks: [],
+  faithfulnessResult: null,
   streamedResponse: '',
   error: null,
   allEmbeddings: [],
@@ -39,6 +54,10 @@ export const useQueryStore = create<QueryState>()((set) => ({
   addScore: (entry) =>
     set((state) => ({ allScores: [...state.allScores, entry] })),
   setRetrievedChunks: (retrievedChunks) => set({ retrievedChunks }),
+  addRelevanceResult: (result) =>
+    set((state) => ({ relevanceResults: [...state.relevanceResults, result] })),
+  setFilteredChunks: (filteredChunks) => set({ filteredChunks }),
+  setFaithfulnessResult: (faithfulnessResult) => set({ faithfulnessResult }),
   appendToken: (token) =>
     set((state) => ({ streamedResponse: state.streamedResponse + token })),
   setError: (error) => set({ error, step: 'ERROR' }),
@@ -48,6 +67,9 @@ export const useQueryStore = create<QueryState>()((set) => ({
       queryVector: null,
       allScores: [],
       retrievedChunks: [],
+      relevanceResults: [],
+      filteredChunks: [],
+      faithfulnessResult: null,
       streamedResponse: '',
       error: null,
     }),

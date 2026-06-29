@@ -6,7 +6,10 @@ interface Props {
 }
 
 const SYSTEM_PROMPT =
-  "Vous êtes un assistant pédagogique. Répondez en vous basant uniquement sur le contexte fourni. Si le contexte ne permet pas de répondre, dites-le clairement."
+  "Vous êtes un assistant pédagogique. Répondez en vous basant uniquement sur le contexte fourni. " +
+  "Citez obligatoirement vos sources après chaque information utilisée avec la notation [Chunk N] " +
+  "(exemple : \"La mitose est une division cellulaire [Chunk 1].\"). " +
+  "Si le contexte ne permet pas de répondre, dites-le clairement sans inventer."
 
 export function PromptBuilder({ query, chunks }: Props) {
   const contextText = chunks

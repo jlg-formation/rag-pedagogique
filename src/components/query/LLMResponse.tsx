@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { Parent, PhrasingContent, Root, RootContent, Text } from 'mdast'
 import { useQueryStore } from '../../stores/queryStore'
 
 const RANK_COLORS = [
@@ -17,7 +20,7 @@ function CitationBadge({ n }: { n: number }) {
   const colorClass = RANK_COLORS[n - 1] ?? 'border-gray-400 bg-gray-50 text-gray-700'
 
   return (
-    <span className="relative inline-block align-baseline">
+    <span className="not-prose relative inline-block align-baseline">
       <button
         onClick={() => setOpen(true)}
         className={`mx-0.5 cursor-pointer rounded border px-1 py-0.5 font-mono text-xs font-semibold transition-opacity hover:opacity-80 ${colorClass}`}
@@ -49,20 +52,52 @@ function CitationBadge({ n }: { n: number }) {
   )
 }
 
-function ResponseWithCitations({ text }: { text: string }) {
-  const parts = text.split(/(\[Chunk\s+\d+\])/g)
+const CITATION_RE = /\[Chunk\s+(\d+)\]/g
+// Citations inside these nodes stay plain text (no button inside a link or code).
+const SKIPPED_NODES = new Set(['code', 'inlineCode', 'link', 'linkReference'])
 
-  return (
-    <>
-      {parts.map((part, i) => {
-        const match = part.match(/^\[Chunk\s+(\d+)\]$/)
-        if (match) {
-          return <CitationBadge key={i} n={parseInt(match[1], 10)} />
-        }
-        return <span key={i} className="whitespace-pre-wrap">{part}</span>
-      })}
-    </>
-  )
+function splitCitations(node: Text): PhrasingContent[] {
+  const out: PhrasingContent[] = []
+  let last = 0
+  for (const m of node.value.matchAll(CITATION_RE)) {
+    if (m.index > last) out.push({ type: 'text', value: node.value.slice(last, m.index) })
+    out.push({
+      type: 'text',
+      value: m[0],
+      data: { hName: 'span', hProperties: { dataCitation: m[1] } },
+    })
+    last = m.index + m[0].length
+  }
+  if (last === 0) return [node]
+  if (last < node.value.length) out.push({ type: 'text', value: node.value.slice(last) })
+  return out
+}
+
+function walkCitations(parent: Parent) {
+  parent.children = parent.children.flatMap<RootContent>((child) => {
+    if (child.type === 'text') return splitCitations(child)
+    if ('children' in child && !SKIPPED_NODES.has(child.type)) walkCitations(child)
+    return [child]
+  })
+}
+
+function remarkCitations() {
+  return (tree: Root) => walkCitations(tree)
+}
+
+const markdownComponents: Components = {
+  span({ node, children, className }) {
+    const n = node?.properties.dataCitation
+    if (n !== undefined) return <CitationBadge n={Number(n)} />
+    return <span className={className}>{children}</span>
+  },
+  a({ href, title, children }) {
+    return (
+      <a href={href} title={title} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    )
+  },
 }
 
 interface Props {
@@ -82,10 +117,17 @@ export function LLMResponse({ response, isStreaming, providerLabel, model }: Pro
         )}
       </div>
 
-      <div className="min-h-16 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-800 leading-relaxed">
+      <div
+        data-testid="llm-response"
+        className="min-h-16 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-800 leading-relaxed"
+      >
         {response ? (
           <>
-            <ResponseWithCitations text={response} />
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkCitations]} components={markdownComponents}>
+                {response}
+              </ReactMarkdown>
+            </div>
             {isStreaming && (
               <span className="ml-0.5 animate-pulse text-blue-500">▋</span>
             )}

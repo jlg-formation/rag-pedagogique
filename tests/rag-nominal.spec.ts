@@ -37,27 +37,28 @@ function embeddingResponse(dims: number, model: string) {
 
 /**
  * Réponse SSE pour /v1/chat/completions (streaming).
- * Simule un message "Le RAG est une technique qui combine recherche et génération."
+ * Par défaut : "Le RAG est une technique qui combine recherche et génération."
  */
-function streamingChatResponse(): string {
-  const tokens = [
-    'Le ',
-    'RAG ',
-    'est ',
-    'une ',
-    'technique ',
-    'qui ',
-    'combine ',
-    'recherche ',
-    'et ',
-    'génération.',
-  ]
+function streamingChatResponse(tokens: string[] = DEFAULT_TOKENS): string {
   const lines = tokens.map((t) =>
     `data: ${JSON.stringify({ choices: [{ delta: { content: t } }] })}`,
   )
   lines.push('data: [DONE]')
   return lines.join('\n') + '\n'
 }
+
+const DEFAULT_TOKENS = [
+  'Le ',
+  'RAG ',
+  'est ',
+  'une ',
+  'technique ',
+  'qui ',
+  'combine ',
+  'recherche ',
+  'et ',
+  'génération.',
+]
 
 /** Intercepte embeddings + chat d'un serveur compatible OpenAI. */
 async function mockChatAndEmbeddings(
@@ -251,6 +252,74 @@ test.describe('Scénario nominal RAG', () => {
     await expect(page.locator('text=Le RAG est une technique')).toBeVisible({
       timeout: 15_000,
     })
+  })
+
+  test('9 – Rendu Markdown de la réponse avec citations', async ({ page }) => {
+    const consoleErrors: string[] = []
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text())
+    })
+    // Jetons coupés au milieu des balises pour simuler du Markdown incomplet en streaming
+    const markdownTokens = [
+      '## Synthèse\n\n',
+      'Le RAG est **gr',
+      'as** et utile [Chunk',
+      ' 1].\n\n',
+      '- **point clé [Chunk 1]**\n',
+      '- second point\n\n',
+      '| Étape | Source |\n',
+      '|---|---|\n',
+      '| Indexation | [Chunk 2] |\n\n',
+      'Voir [la doc](https://example.com) et <b>danger</b> [Chunk 9].',
+    ]
+    await page.route(`${OPENAI_URL}/chat/completions`, (route: Route) => {
+      route.fulfill({
+        status: 200,
+        headers: CORS,
+        contentType: 'text/event-stream',
+        body: streamingChatResponse(markdownTokens),
+      })
+    })
+    await page.addInitScript(() => {
+      localStorage.setItem('openai-api-key', 'sk-test-fake-key')
+    })
+
+    await page.goto('./')
+    await indexSampleDocument(page)
+    await page.locator('text=💬 Requête').click()
+    await page
+      .locator('input[placeholder*="Qu\'est-ce que le RAG"]')
+      .fill("Qu'est-ce que le RAG ?")
+    await page.locator('button', { hasText: '🔍 Chercher' }).click()
+
+    const response = page.getByTestId('llm-response')
+    await expect(response.locator('h2', { hasText: 'Synthèse' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(response.locator('strong', { hasText: 'gras' })).toBeVisible()
+    await expect(response.locator('li')).toHaveCount(2)
+    await expect(response.locator('table')).toBeVisible()
+
+    // Badges cliquables intégrés dans les éléments Markdown
+    await expect(response.locator('li strong button', { hasText: 'Chunk 1' })).toBeVisible()
+    const tableBadge = response.locator('td button', { hasText: 'Chunk 2' })
+    await expect(tableBadge).toBeVisible()
+    await tableBadge.click()
+    await expect(response.getByText(/· chunk \d+/)).toBeVisible()
+    await page.mouse.click(5, 5)
+
+    // Chunk inexistant : repli texte gris
+    await expect(response.getByText('[Chunk 9]')).toBeVisible()
+
+    const link = response.locator('a', { hasText: 'la doc' })
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+
+    // HTML brut affiché comme texte, non interprété
+    await expect(response.getByText('<b>danger</b>')).toBeVisible()
+    await expect(response.locator('b')).toHaveCount(0)
+
+    expect(consoleErrors).toEqual([])
   })
 })
 

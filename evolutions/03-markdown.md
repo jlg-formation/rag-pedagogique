@@ -1,0 +1,1 @@
+Quand le LLM répond, des fois, il répond avec du Markdown. J'aimerais bien que tu interprètes le Markdown à l'écran pour qu'il soit joli. 

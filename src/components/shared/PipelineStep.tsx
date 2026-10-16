@@ -5,10 +5,11 @@ interface Props {
   number: number
   title: string
   status: 'pending' | 'active' | 'done'
+  badge?: string
   children?: React.ReactNode
 }
 
-export function PipelineStep({ number, title, status, children }: Props) {
+export function PipelineStep({ number, title, status, badge, children }: Props) {
   return (
     <div
       className={clsx(
@@ -30,6 +31,11 @@ export function PipelineStep({ number, title, status, children }: Props) {
         >
           {title}
         </h3>
+        {badge && (
+          <span className="ml-auto rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600">
+            {badge}
+          </span>
+        )}
       </div>
       {status !== 'pending' && children}
     </div>

@@ -11,6 +11,7 @@ interface IndexingState {
   embeddingStatuses: ChunkEmbeddingStatus[]
   error: string | null
   totalIndexed: number
+  storageLog: string[]
 
   setStep: (step: IndexingStep) => void
   setConfig: (config: ProviderConfig) => void
@@ -26,6 +27,7 @@ interface IndexingState {
   setError: (error: string) => void
   incrementIndexed: () => void
   setTotalIndexed: (n: number) => void
+  addStorageLog: (message: string) => void
   reset: () => void
 }
 
@@ -38,6 +40,7 @@ export const useIndexingStore = create<IndexingState>()((set) => ({
   embeddingStatuses: [],
   error: null,
   totalIndexed: 0,
+  storageLog: [],
 
   setStep: (step) => set({ step }),
   setConfig: (config) => set({ config }),
@@ -62,6 +65,8 @@ export const useIndexingStore = create<IndexingState>()((set) => ({
   incrementIndexed: () =>
     set((state) => ({ totalIndexed: state.totalIndexed + 1 })),
   setTotalIndexed: (n) => set({ totalIndexed: n }),
+  addStorageLog: (message) =>
+    set((state) => ({ storageLog: [...state.storageLog, message] })),
   reset: () =>
     set({
       step: 'IDLE',
@@ -69,5 +74,6 @@ export const useIndexingStore = create<IndexingState>()((set) => ({
       embeddingStatuses: [],
       error: null,
       totalIndexed: 0,
+      storageLog: [],
     }),
 }))

@@ -3,8 +3,11 @@ export type IndexingStep =
   | 'CHUNKING'
   | 'CHUNKED'
   | 'EMBEDDING'
+  | 'STORING'
   | 'DONE'
   | 'ERROR'
+
+export type VectorBackend = 'indexeddb' | 'pinecone'
 
 export type QueryStep =
   | 'IDLE'
@@ -57,6 +60,7 @@ export interface ChunkRecord {
   startChar: number
   endChar: number
   hasEmbedding: boolean
+  vectorId?: string
 }
 
 export interface EmbeddingRecord {
@@ -89,6 +93,27 @@ export interface ScoredChunk {
   score: number
   documentName: string
 }
+
+export interface PineconeMatch {
+  id: string
+  score: number
+  metadata?: Record<string, unknown>
+}
+
+export interface PineconeQueryTrace {
+  indexName: string
+  host: string
+  namespace: string
+  topK: number
+  dimension: number
+  vectorPreview: number[]
+  matches: PineconeMatch[]
+  durationMs: number
+}
+
+export type SearchResult =
+  | { mode: 'local'; scored: ScoredChunk[] }
+  | { mode: 'server'; scored: ScoredChunk[]; trace: PineconeQueryTrace | null }
 
 export interface StoredDocument {
   doc: DocumentRecord

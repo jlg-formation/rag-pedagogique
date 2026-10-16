@@ -1,13 +1,13 @@
 import { useSettingsStore, getActiveConfig } from '../stores/settingsStore'
 import { useQueryStore } from '../stores/queryStore'
 import { createEmbedding, streamChatCompletion, chatCompletion } from '../services/openai'
-import {
-  getAllEmbeddings,
-  getAllChunks,
-  getDocuments,
-} from '../services/vectorStore'
-import { cosineSimilarity } from '../services/similarity'
-import type { ScoredChunk, RelevanceVerdict, FaithfulnessVerdict } from '../types'
+import { getActiveBackend } from '../services/vectorBackends'
+import type {
+  ScoredChunk,
+  SearchResult,
+  RelevanceVerdict,
+  FaithfulnessVerdict,
+} from '../types'
 
 const SYSTEM_PROMPT =
   "Vous êtes un assistant pédagogique. Répondez en vous basant uniquement sur le contexte fourni. " +
@@ -112,9 +112,12 @@ export function useQueryPipeline() {
   const store = useQueryStore()
 
   async function startQuery(question: string) {
-    const aiConfig = getActiveConfig(useSettingsStore.getState())
+    const settings = useSettingsStore.getState()
+    const aiConfig = getActiveConfig(settings)
+    const backend = getActiveBackend(settings)
     store.reset()
     store.setConfig(aiConfig)
+    store.setBackendKind(backend.kind)
     store.setQuery(question)
 
     // Step 1 — embed the query
@@ -128,47 +131,46 @@ export function useQueryPipeline() {
     }
     store.setQueryVector(queryVector)
 
-    // Step 2 — load embeddings + compute similarity (animated)
+    // Step 2 — similarity search (local cosine or server-side Pinecone query)
     store.setStep('SIMILARITY')
-    const [allEmbeddings, allChunks, allDocs] = await Promise.all([
-      getAllEmbeddings(),
-      getAllChunks(),
-      getDocuments(),
-    ])
-    store.setAllEmbeddings(allEmbeddings)
+    let result: SearchResult
+    try {
+      result = await backend.search(queryVector, topK, aiConfig)
+    } catch (err) {
+      store.setError(`Erreur de recherche ${backend.label} : ${String(err)}`)
+      return
+    }
 
-    const chunkMap = new Map(allChunks.map((c) => [c.id!, c]))
-    const docNameMap = new Map(allDocs.map((d) => [d.id!, d.name]))
-
-    // Animate similarity computation one chunk at a time
-    for (const emb of allEmbeddings) {
-      const score = cosineSimilarity(queryVector, emb.vector)
-      const chunk = chunkMap.get(emb.chunkId)
-      store.addScore({
-        chunkId: emb.chunkId,
-        score,
-        text: chunk?.text.slice(0, 60) ?? '',
-      })
-      await delay(80)
+    let topChunks: ScoredChunk[]
+    if (result.mode === 'local') {
+      // Animate similarity computation one chunk at a time
+      for (const sc of result.scored) {
+        store.addScore({
+          chunkId: sc.chunk.id!,
+          score: sc.score,
+          text: sc.chunk.text.slice(0, 60),
+        })
+        await delay(80)
+      }
+      topChunks = [...result.scored]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, topK)
+    } else {
+      store.setPineconeTrace(result.trace)
+      for (const sc of result.scored) {
+        store.addScore({
+          chunkId: sc.chunk.id!,
+          score: sc.score,
+          text: sc.chunk.text.slice(0, 60),
+        })
+      }
+      topChunks = result.scored
     }
 
     // Step 3 — retrieve top-k
     store.setStep('RETRIEVING')
     await delay(300)
 
-    const scored = allEmbeddings
-      .map((emb) => {
-        const chunk = chunkMap.get(emb.chunkId)
-        if (!chunk) return null
-        return {
-          chunk,
-          score: cosineSimilarity(queryVector, emb.vector),
-          documentName: docNameMap.get(emb.documentId) ?? 'Inconnu',
-        } as ScoredChunk
-      })
-      .filter(Boolean) as ScoredChunk[]
-
-    const topChunks = scored.sort((a, b) => b.score - a.score).slice(0, topK)
     store.setRetrievedChunks(topChunks)
 
     // Step 3.5 — Self-RAG relevance check (optional)

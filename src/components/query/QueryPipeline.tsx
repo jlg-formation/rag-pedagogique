@@ -1,9 +1,10 @@
 import { useQueryStore } from '../../stores/queryStore'
 import { useQueryPipeline } from '../../hooks/useQueryPipeline'
-import { useSettingsStore, isConfigured } from '../../stores/settingsStore'
+import { useSettingsStore, isConfigured, VECTOR_BACKEND_LABELS } from '../../stores/settingsStore'
 import { QueryInput } from './QueryInput'
 import { QueryEmbedding } from './QueryEmbedding'
 import { SimilaritySearch } from './SimilaritySearch'
+import { PineconeQueryView } from './PineconeQueryView'
 import { RetrievedChunks } from './RetrievedChunks'
 import { PromptBuilder } from './PromptBuilder'
 import { LLMResponse } from './LLMResponse'
@@ -56,6 +57,8 @@ export function QueryPipeline() {
   const configured = useSettingsStore(isConfigured)
   const providerLabel = store.config?.label ?? ''
   const chatModel = store.config?.chatModel ?? ''
+  const isPinecone = store.backendKind === 'pinecone'
+  const backendLabel = VECTOR_BACKEND_LABELS[store.backendKind]
 
   const ORDERED = selfRagEnabled ? ORDERED_WITH_SELF_RAG : ORDERED_WITHOUT_SELF_RAG
 
@@ -110,10 +113,22 @@ export function QueryPipeline() {
           {/* Step 2 */}
           <PipelineStep
             number={2}
-            title="Recherche par similarité cosinus"
+            title={
+              isPinecone
+                ? 'Recherche vectorielle côté serveur (Pinecone)'
+                : 'Recherche par similarité cosinus'
+            }
             status={stepStatus(s, ORDERED, 'SIMILARITY')}
+            badge={backendLabel}
           >
-            <SimilaritySearch scores={store.allScores} topK={topK} />
+            {isPinecone ? (
+              <PineconeQueryView
+                trace={store.pineconeTrace}
+                isLoading={s === 'SIMILARITY'}
+              />
+            ) : (
+              <SimilaritySearch scores={store.allScores} topK={topK} />
+            )}
           </PipelineStep>
 
           <div className="flex justify-center text-gray-300">▼</div>
@@ -123,6 +138,7 @@ export function QueryPipeline() {
             number={3}
             title={`Chunks récupérés (top-${topK})`}
             status={stepStatus(s, ORDERED, 'RETRIEVING')}
+            badge={backendLabel}
           >
             <RetrievedChunks chunks={store.retrievedChunks} />
           </PipelineStep>

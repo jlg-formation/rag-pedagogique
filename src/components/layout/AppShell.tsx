@@ -4,10 +4,12 @@ import clsx from 'clsx'
 import {
   useSettingsStore,
   isConfigured,
+  getActiveConfig,
   PROVIDER_LABELS,
+  VECTOR_BACKEND_LABELS,
 } from '../../stores/settingsStore'
 import { ApiKeyModal } from '../settings/ApiKeyModal'
-import { clearAllData } from '../../db/client'
+import { getActiveBackend } from '../../services/vectorBackends'
 
 export function AppShell() {
   const settings = useSettingsStore()
@@ -16,9 +18,23 @@ export function AppShell() {
   const [clearing, setClearing] = useState(false)
 
   async function handleClear() {
-    if (!confirm('Supprimer tous les documents et embeddings indexés ?')) return
+    const isPinecone = settings.vectorBackend === 'pinecone'
+    if (
+      !confirm(
+        isPinecone
+          ? 'Supprimer tous les vecteurs du namespace Pinecone actif ?'
+          : 'Supprimer tous les documents et embeddings indexés ?',
+      )
+    )
+      return
     setClearing(true)
-    await clearAllData()
+    try {
+      await getActiveBackend(settings).clear(getActiveConfig(settings))
+    } catch (err) {
+      alert(`Erreur lors du vidage : ${String(err)}`)
+      setClearing(false)
+      return
+    }
     setClearing(false)
     window.location.reload()
   }
@@ -93,7 +109,9 @@ export function AppShell() {
               />
               <span className="text-gray-600">
                 {configured
-                  ? `${PROVIDER_LABELS[settings.provider]} configuré`
+                  ? settings.vectorBackend === 'pinecone'
+                    ? `${PROVIDER_LABELS[settings.provider]} · ${VECTOR_BACKEND_LABELS.pinecone} configuré`
+                    : `${PROVIDER_LABELS[settings.provider]} configuré`
                   : 'Configurer IA'}
               </span>
             </button>

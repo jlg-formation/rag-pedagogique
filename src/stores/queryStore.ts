@@ -2,9 +2,10 @@ import { create } from 'zustand'
 import type {
   QueryStep,
   ScoredChunk,
-  EmbeddingRecord,
   ChunkRelevanceResult,
   FaithfulnessResult,
+  PineconeQueryTrace,
+  VectorBackend,
 } from '../types'
 import type { ProviderConfig } from './settingsStore'
 
@@ -20,13 +21,15 @@ interface QueryState {
   faithfulnessResult: FaithfulnessResult | null
   streamedResponse: string
   error: string | null
-  allEmbeddings: EmbeddingRecord[]
+  backendKind: VectorBackend
+  pineconeTrace: PineconeQueryTrace | null
 
   setStep: (step: QueryStep) => void
   setConfig: (config: ProviderConfig) => void
   setQuery: (query: string) => void
   setQueryVector: (vector: Float32Array) => void
-  setAllEmbeddings: (embeddings: EmbeddingRecord[]) => void
+  setBackendKind: (kind: VectorBackend) => void
+  setPineconeTrace: (trace: PineconeQueryTrace | null) => void
   addScore: (entry: { chunkId: number; score: number; text: string }) => void
   setRetrievedChunks: (chunks: ScoredChunk[]) => void
   addRelevanceResult: (result: ChunkRelevanceResult) => void
@@ -49,13 +52,15 @@ export const useQueryStore = create<QueryState>()((set) => ({
   faithfulnessResult: null,
   streamedResponse: '',
   error: null,
-  allEmbeddings: [],
+  backendKind: 'indexeddb',
+  pineconeTrace: null,
 
   setStep: (step) => set({ step }),
   setConfig: (config) => set({ config }),
   setQuery: (query) => set({ query }),
   setQueryVector: (queryVector) => set({ queryVector }),
-  setAllEmbeddings: (allEmbeddings) => set({ allEmbeddings }),
+  setBackendKind: (backendKind) => set({ backendKind }),
+  setPineconeTrace: (pineconeTrace) => set({ pineconeTrace }),
   addScore: (entry) =>
     set((state) => ({ allScores: [...state.allScores, entry] })),
   setRetrievedChunks: (retrievedChunks) => set({ retrievedChunks }),
@@ -77,5 +82,6 @@ export const useQueryStore = create<QueryState>()((set) => ({
       faithfulnessResult: null,
       streamedResponse: '',
       error: null,
+      pineconeTrace: null,
     }),
 }))

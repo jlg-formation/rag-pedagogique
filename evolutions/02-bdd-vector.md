@@ -1,0 +1,1 @@
+Je voudrais que, dans le logiciel, on puisse choisir d'utiliser en base de données vectorielle l'indexedDB, comme c'est déjà le cas. Mais en plus, si on veut, on switche d'indexedDB vers une base de données comme Pinecone. 

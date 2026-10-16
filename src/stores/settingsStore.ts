@@ -1,6 +1,14 @@
 import { create } from 'zustand'
+import type { VectorBackend } from '../types'
 
 export type Provider = 'openai' | 'lmstudio'
+
+export const VECTOR_BACKEND_LABELS: Record<VectorBackend, string> = {
+  indexeddb: 'IndexedDB',
+  pinecone: 'Pinecone',
+}
+
+export const DEFAULT_PINECONE_INDEX_PREFIX = 'rag-pedagogique'
 
 export const PROVIDER_LABELS: Record<Provider, string> = {
   openai: 'OpenAI',
@@ -20,7 +28,7 @@ export interface ProviderConfig {
   embeddingModel: string
 }
 
-interface SettingsState {
+export interface SettingsState {
   provider: Provider
   apiKey: string
   chatModel: string
@@ -29,6 +37,12 @@ interface SettingsState {
   lmEmbeddingModel: string
   topK: number
   selfRagEnabled: boolean
+  vectorBackend: VectorBackend
+  pineconeApiKey: string
+  pineconeIndexPrefix: string
+  setVectorBackend: (backend: VectorBackend) => void
+  setPineconeApiKey: (key: string) => void
+  setPineconeIndexPrefix: (prefix: string) => void
   setProvider: (provider: Provider) => void
   setApiKey: (key: string) => void
   setChatModel: (model: string) => void
@@ -53,6 +67,23 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   lmEmbeddingModel: localStorage.getItem('lmstudio-embedding-model') ?? '',
   topK: 3,
   selfRagEnabled: localStorage.getItem('self-rag-enabled') === 'true',
+  vectorBackend:
+    localStorage.getItem('vector-backend') === 'pinecone' ? 'pinecone' : 'indexeddb',
+  pineconeApiKey: localStorage.getItem('pinecone-api-key') ?? '',
+  pineconeIndexPrefix:
+    localStorage.getItem('pinecone-index-prefix') || DEFAULT_PINECONE_INDEX_PREFIX,
+  setVectorBackend: (vectorBackend) => {
+    persisted('vector-backend', vectorBackend)
+    set({ vectorBackend })
+  },
+  setPineconeApiKey: (pineconeApiKey) => {
+    persisted('pinecone-api-key', pineconeApiKey)
+    set({ pineconeApiKey })
+  },
+  setPineconeIndexPrefix: (pineconeIndexPrefix) => {
+    persisted('pinecone-index-prefix', pineconeIndexPrefix)
+    set({ pineconeIndexPrefix })
+  },
   setProvider: (provider) => {
     persisted('ai-provider', provider)
     set({ provider })
@@ -102,6 +133,7 @@ export function getActiveConfig(s: SettingsState): ProviderConfig {
 }
 
 export function isConfigured(s: SettingsState): boolean {
+  if (s.vectorBackend === 'pinecone' && !s.pineconeApiKey) return false
   if (s.provider === 'lmstudio') {
     return Boolean(s.lmBaseUrl && s.lmChatModel && s.lmEmbeddingModel)
   }

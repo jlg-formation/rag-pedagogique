@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useIndexingStore } from '../../stores/indexingStore'
 import { useIndexingPipeline } from '../../hooks/useIndexingPipeline'
-import { useSettingsStore, isConfigured } from '../../stores/settingsStore'
+import {
+  useSettingsStore,
+  isConfigured,
+  getActiveConfig,
+  VECTOR_BACKEND_LABELS,
+} from '../../stores/settingsStore'
 import { DocumentInput } from './DocumentInput'
 import { ChunkingConfigPanel } from './ChunkingConfig'
 import { ChunkVisualizer } from './ChunkVisualizer'
 import { EmbeddingProgress } from './EmbeddingProgress'
 import { VectorStoreView } from './VectorStoreView'
 import { PipelineStep } from '../shared/PipelineStep'
-import { getDocuments } from '../../services/vectorStore'
+import { getActiveBackend } from '../../services/vectorBackends'
 import type { ChunkingConfig } from '../../types'
 
 function stepStatus(
@@ -23,10 +28,11 @@ function stepStatus(
   return 'done'
 }
 
-const STEPS = ['IDLE', 'CHUNKING', 'CHUNKED', 'EMBEDDING', 'DONE', 'ERROR']
+const STEPS = ['IDLE', 'CHUNKING', 'CHUNKED', 'EMBEDDING', 'STORING', 'DONE', 'ERROR']
 
 export function IndexingPipeline() {
   const configured = useSettingsStore(isConfigured)
+  const vectorBackend = useSettingsStore((s) => s.vectorBackend)
   const { startIndexing } = useIndexingPipeline()
   const store = useIndexingStore()
   const [config, setConfig] = useState<ChunkingConfig>({
@@ -38,17 +44,21 @@ export function IndexingPipeline() {
 
   useEffect(() => {
     if (store.step === 'IDLE') {
-      getDocuments().then((docs) => {
-        if (docs.length > 0) {
-          store.setStep('DONE')
-          const total = docs.reduce((s, d) => s + d.chunkCount, 0)
-          store.setTotalIndexed(total)
-        }
-      })
+      const settings = useSettingsStore.getState()
+      getActiveBackend(settings)
+        .listDocuments(getActiveConfig(settings))
+        .then((docs) => {
+          if (docs.length > 0) {
+            store.setStep('DONE')
+            const total = docs.reduce((s, d) => s + d.chunkCount, 0)
+            store.setTotalIndexed(total)
+          }
+        })
+        .catch(() => {})
     }
   }, [])
 
-  const isRunning = ['CHUNKING', 'CHUNKED', 'EMBEDDING'].includes(store.step)
+  const isRunning = ['CHUNKING', 'CHUNKED', 'EMBEDDING', 'STORING'].includes(store.step)
 
   async function handleSubmit(text: string, name: string) {
     if (!configured) {
@@ -61,7 +71,8 @@ export function IndexingPipeline() {
 
   const chunkStep = stepStatus(store.step, STEPS, 'CHUNKING')
   const embStep = stepStatus(store.step, STEPS, 'EMBEDDING')
-  const storeStep = stepStatus(store.step, STEPS, 'DONE')
+  const storeStep =
+    store.step === 'STORING' ? 'active' : stepStatus(store.step, STEPS, 'DONE')
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -108,10 +119,10 @@ export function IndexingPipeline() {
         <PipelineStep
           key={storeKey}
           number={3}
-          title="Stockage vectoriel (IndexedDB)"
+          title={`Stockage vectoriel (${VECTOR_BACKEND_LABELS[vectorBackend]})`}
           status={storeStep}
         >
-          <VectorStoreView key={storeKey} />
+          <VectorStoreView key={storeKey} isStoring={store.step === 'STORING'} />
         </PipelineStep>
 
         {store.step === 'ERROR' && store.error && (

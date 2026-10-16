@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import {
   useSettingsStore,
   PROVIDER_LABELS,
+  VECTOR_BACKEND_LABELS,
   type Provider,
 } from '../../stores/settingsStore'
 import {
@@ -10,8 +11,10 @@ import {
   isEmbeddingModel,
   type ConnectionResult,
 } from '../../services/openai'
+import { isValidIndexPrefix, sanitizeIndexPrefix } from '../../services/pinecone'
 import { clearAllData } from '../../db/client'
 import { getDocuments } from '../../services/vectorStore'
+import type { VectorBackend } from '../../types'
 
 interface Props {
   onClose: () => void
@@ -33,6 +36,10 @@ export function ApiKeyModal({ onClose }: Props) {
   const [showAllModels, setShowAllModels] = useState(false)
   const [testing, setTesting] = useState(settings.provider === 'lmstudio')
   const [connection, setConnection] = useState<ConnectionResult | null>(null)
+  const [vectorBackend, setVectorBackend] = useState<VectorBackend>(settings.vectorBackend)
+  const [pineconeKey, setPineconeKey] = useState(settings.pineconeApiKey)
+  const [pineconePrefix, setPineconePrefix] = useState(settings.pineconeIndexPrefix)
+  const prefixValid = isValidIndexPrefix(sanitizeIndexPrefix(pineconePrefix))
 
   function applyConnection(result: ConnectionResult) {
     setConnection(result)
@@ -78,7 +85,8 @@ export function ApiKeyModal({ onClose }: Props) {
   }
 
   const canSave =
-    provider === 'openai' || Boolean(baseUrl.trim() && lmChatModel && lmEmbeddingModel)
+    (provider === 'openai' || Boolean(baseUrl.trim() && lmChatModel && lmEmbeddingModel)) &&
+    (vectorBackend === 'indexeddb' || Boolean(pineconeKey.trim() && prefixValid))
 
   async function save() {
     if (!canSave) return
@@ -99,6 +107,9 @@ export function ApiKeyModal({ onClose }: Props) {
     settings.setLmChatModel(lmChatModel)
     settings.setLmEmbeddingModel(lmEmbeddingModel)
     settings.setProvider(provider)
+    settings.setPineconeApiKey(pineconeKey.trim())
+    settings.setPineconeIndexPrefix(sanitizeIndexPrefix(pineconePrefix))
+    settings.setVectorBackend(vectorBackend)
     if (mustClear) {
       await clearAllData()
       window.location.reload()
@@ -256,6 +267,69 @@ export function ApiKeyModal({ onClose }: Props) {
             </label>
           </div>
         </div>
+
+        <p className="mb-1 text-sm font-medium text-gray-700">Base vectorielle</p>
+        <div className="mb-4 flex gap-1 rounded-lg bg-gray-100 p-1" role="radiogroup">
+          {(['indexeddb', 'pinecone'] as VectorBackend[]).map((b) => (
+            <label
+              key={b}
+              className={clsx(
+                'flex-1 cursor-pointer rounded-md px-3 py-1.5 text-center text-sm font-medium transition-all',
+                vectorBackend === b ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900',
+              )}
+            >
+              <input
+                type="radio"
+                name="vector-backend"
+                value={b}
+                checked={vectorBackend === b}
+                onChange={() => setVectorBackend(b)}
+                className="sr-only"
+              />
+              {VECTOR_BACKEND_LABELS[b]}
+            </label>
+          ))}
+        </div>
+
+        {vectorBackend === 'indexeddb' ? (
+          <p className="mb-4 text-xs text-gray-500">
+            Stockage local dans le navigateur, similarité cosinus calculée côté client.
+          </p>
+        ) : (
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="pinecone-api-key">
+              Clé API Pinecone
+            </label>
+            <input
+              id="pinecone-api-key"
+              type="password"
+              value={pineconeKey}
+              onChange={(e) => setPineconeKey(e.target.value)}
+              placeholder="pcsk_..."
+              className={`mb-3 font-mono ${INPUT_CLS}`}
+            />
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="pinecone-prefix">
+              Préfixe des index
+            </label>
+            <input
+              id="pinecone-prefix"
+              type="text"
+              value={pineconePrefix}
+              onChange={(e) => setPineconePrefix(e.target.value)}
+              className={`mb-1 font-mono ${INPUT_CLS}`}
+            />
+            <p className={clsx('mb-2 text-xs', prefixValid ? 'text-gray-500' : 'text-red-600')}>
+              {prefixValid
+                ? `Un index par dimension (ex. ${sanitizeIndexPrefix(pineconePrefix)}-1536), un namespace par fournisseur/modèle.`
+                : 'Minuscules, chiffres et tirets uniquement (38 caractères max).'}
+            </p>
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              ⚠️ La clé est stockée dans le localStorage et envoyée directement depuis le
+              navigateur à Pinecone (usage pédagogique uniquement). Les index sont créés
+              automatiquement en serverless sur aws us-east-1 (offre gratuite).
+            </p>
+          </div>
+        )}
 
         <label className="mb-1 block text-sm font-medium text-gray-700">
           Nombre de chunks récupérés (top-k) : <strong>{topK}</strong>

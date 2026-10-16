@@ -30,6 +30,11 @@ export function RetrievedChunks({ chunks }: Props) {
             </span>
           </div>
           <p className="text-sm text-gray-700">{sc.chunk.text}</p>
+          {sc.chunk.vectorId && (
+            <p className="mt-1 font-mono text-xs text-gray-400">
+              id Pinecone : {sc.chunk.vectorId}
+            </p>
+          )}
         </div>
       ))}
     </div>

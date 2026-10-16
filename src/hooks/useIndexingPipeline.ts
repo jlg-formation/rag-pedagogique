@@ -2,12 +2,7 @@ import { useSettingsStore, getActiveConfig } from '../stores/settingsStore'
 import { useIndexingStore } from '../stores/indexingStore'
 import { splitIntoChunks } from '../services/chunker'
 import { createEmbedding } from '../services/openai'
-import {
-  saveDocument,
-  saveChunks,
-  saveEmbedding,
-  markChunkEmbedded,
-} from '../services/vectorStore'
+import { getActiveBackend } from '../services/vectorBackends'
 import type { ChunkingConfig } from '../types'
 
 export function useIndexingPipeline() {
@@ -18,7 +13,9 @@ export function useIndexingPipeline() {
     docName: string,
     config: ChunkingConfig,
   ) {
-    const aiConfig = getActiveConfig(useSettingsStore.getState())
+    const settings = useSettingsStore.getState()
+    const aiConfig = getActiveConfig(settings)
+    const backend = getActiveBackend(settings)
     store.reset()
     store.setConfig(aiConfig)
     store.setSource(text, docName)
@@ -27,15 +24,23 @@ export function useIndexingPipeline() {
     // Step 1 — chunk
     const candidates = splitIntoChunks(text, config)
 
-    const docId = await saveDocument({
-      name: docName,
-      content: text,
-      createdAt: Date.now(),
-      chunkCount: candidates.length,
-      chunkingConfig: config,
-    })
-
-    const chunkRecords = await saveChunks(candidates, docId)
+    let created: Awaited<ReturnType<typeof backend.createDocument>>
+    try {
+      created = await backend.createDocument(
+        {
+          name: docName,
+          content: text,
+          createdAt: Date.now(),
+          chunkCount: candidates.length,
+          chunkingConfig: config,
+        },
+        candidates,
+      )
+    } catch (err) {
+      store.setError(`Erreur ${backend.label} : ${String(err)}`)
+      return
+    }
+    const { doc, chunks: chunkRecords } = created
     store.setChunks(chunkRecords)
     store.setStep('CHUNKED')
 
@@ -46,18 +51,12 @@ export function useIndexingPipeline() {
     store.initEmbeddingStatuses(chunkRecords)
     store.setStep('EMBEDDING')
 
+    const vectors: Float32Array[] = []
     for (const chunk of chunkRecords) {
       store.updateEmbeddingStatus(chunk.id!, 'loading')
       try {
         const vector = await createEmbedding(chunk.text, aiConfig)
-        await saveEmbedding({
-          chunkId: chunk.id!,
-          documentId: docId,
-          vector,
-          model: aiConfig.embeddingModel,
-          createdAt: Date.now(),
-        })
-        await markChunkEmbedded(chunk.id!)
+        vectors.push(vector)
         store.updateEmbeddingStatus(chunk.id!, 'done', vector)
         store.incrementIndexed()
       } catch (err) {
@@ -72,6 +71,21 @@ export function useIndexingPipeline() {
         )
         return
       }
+    }
+
+    // Step 3 — store vectors in the active backend
+    store.setStep('STORING')
+    try {
+      await backend.storeEmbeddings(
+        doc,
+        chunkRecords,
+        vectors,
+        aiConfig,
+        store.addStorageLog,
+      )
+    } catch (err) {
+      store.setError(`Erreur de stockage ${backend.label} : ${String(err)}`)
+      return
     }
 
     store.setStep('DONE')

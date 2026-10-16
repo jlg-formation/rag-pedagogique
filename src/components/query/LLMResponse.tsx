@@ -68,14 +68,15 @@ function ResponseWithCitations({ text }: { text: string }) {
 interface Props {
   response: string
   isStreaming: boolean
+  providerLabel: string
   model: string
 }
 
-export function LLMResponse({ response, isStreaming, model }: Props) {
+export function LLMResponse({ response, isStreaming, providerLabel, model }: Props) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-xs text-gray-500">
-        <span>Modèle : <span className="font-mono">{model}</span></span>
+        <span>{providerLabel} · Modèle : <span className="font-mono">{model}</span></span>
         {isStreaming && (
           <span className="text-blue-500 animate-pulse">● Génération en cours…</span>
         )}

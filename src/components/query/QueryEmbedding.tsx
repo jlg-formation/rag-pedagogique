@@ -4,11 +4,16 @@ interface Props {
   query: string
   vector: Float32Array | null
   isLoading: boolean
+  providerLabel: string
+  model: string
 }
 
-export function QueryEmbedding({ query, vector, isLoading }: Props) {
+export function QueryEmbedding({ query, vector, isLoading, providerLabel, model }: Props) {
   return (
     <div className="space-y-3">
+      <p className="text-xs text-gray-500">
+        Appel API {providerLabel} (<span className="font-mono">{model}</span>)
+      </p>
       <div className="flex items-center gap-3">
         <div className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
           "{query}"
@@ -18,7 +23,7 @@ export function QueryEmbedding({ query, vector, isLoading }: Props) {
           {isLoading ? (
             <span className="animate-pulse">Calcul du vecteur…</span>
           ) : vector ? (
-            <span>Vecteur (1536 dim)</span>
+            <span>Vecteur ({vector.length} dim)</span>
           ) : null}
         </div>
       </div>

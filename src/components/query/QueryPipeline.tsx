@@ -1,6 +1,6 @@
 import { useQueryStore } from '../../stores/queryStore'
 import { useQueryPipeline } from '../../hooks/useQueryPipeline'
-import { useSettingsStore } from '../../stores/settingsStore'
+import { useSettingsStore, isConfigured } from '../../stores/settingsStore'
 import { QueryInput } from './QueryInput'
 import { QueryEmbedding } from './QueryEmbedding'
 import { SimilaritySearch } from './SimilaritySearch'
@@ -52,7 +52,10 @@ const ORDERED_WITHOUT_SELF_RAG = [
 export function QueryPipeline() {
   const { startQuery } = useQueryPipeline()
   const store = useQueryStore()
-  const { apiKey, chatModel, topK, selfRagEnabled } = useSettingsStore()
+  const { topK, selfRagEnabled } = useSettingsStore()
+  const configured = useSettingsStore(isConfigured)
+  const providerLabel = store.config?.label ?? ''
+  const chatModel = store.config?.chatModel ?? ''
 
   const ORDERED = selfRagEnabled ? ORDERED_WITH_SELF_RAG : ORDERED_WITHOUT_SELF_RAG
 
@@ -67,8 +70,8 @@ export function QueryPipeline() {
   ].includes(store.step)
 
   function handleQuery(question: string) {
-    if (!apiKey) {
-      alert('Veuillez configurer votre clé API OpenAI dans les paramètres.')
+    if (!configured) {
+      alert('Veuillez configurer le fournisseur IA dans les paramètres.')
       return
     }
     startQuery(question)
@@ -97,6 +100,8 @@ export function QueryPipeline() {
               query={store.query}
               vector={store.queryVector}
               isLoading={s === 'EMBEDDING_QUERY'}
+              providerLabel={providerLabel}
+              model={store.config?.embeddingModel ?? ''}
             />
           </PipelineStep>
 
@@ -137,6 +142,8 @@ export function QueryPipeline() {
                   results={store.relevanceResults}
                   filteredChunks={store.filteredChunks}
                   isLoading={s === 'SELF_RAG_RELEVANCE'}
+                  providerLabel={providerLabel}
+                  model={chatModel}
                 />
               </PipelineStep>
               <div className="flex justify-center text-gray-300">▼</div>
@@ -168,6 +175,7 @@ export function QueryPipeline() {
             <LLMResponse
               response={store.streamedResponse}
               isStreaming={s === 'STREAMING'}
+              providerLabel={providerLabel}
               model={chatModel}
             />
           </PipelineStep>
@@ -184,6 +192,8 @@ export function QueryPipeline() {
                 <SelfRagFaithfulness
                   result={store.faithfulnessResult}
                   isLoading={s === 'SELF_RAG_FAITHFULNESS'}
+                  providerLabel={providerLabel}
+                  model={chatModel}
                 />
               </PipelineStep>
             </>

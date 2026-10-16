@@ -1,5 +1,19 @@
 # React + TypeScript + Vite
 
+## Utiliser LM Studio (modèles locaux)
+
+L'application peut utiliser [LM Studio](https://lmstudio.ai) à la place d'OpenAI pour toutes les opérations IA (embeddings, chat, Self-RAG), sans clé API.
+
+1. Dans LM Studio, chargez un modèle de chat **et** un modèle d'embedding (ex. `nomic-embed-text`).
+2. Onglet *Developer* : démarrez le serveur local (par défaut `http://localhost:1234`) et activez **Enable CORS**.
+3. Dans l'application, ouvrez les paramètres, choisissez **LM Studio**, vérifiez l'URL (`http://localhost:1234/v1`) puis cliquez sur **Tester la connexion**. Sélectionnez les modèles et enregistrez.
+
+Fonctionne aussi depuis la version GitHub Pages (HTTPS) : les navigateurs autorisent les appels vers `http://localhost`, à condition que CORS soit activé dans LM Studio.
+
+Changer de fournisseur vide l'index (après confirmation) : les embeddings des deux fournisseurs ne sont pas compatibles.
+
+---
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

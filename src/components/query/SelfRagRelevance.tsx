@@ -5,6 +5,8 @@ interface Props {
   results: ChunkRelevanceResult[]
   filteredChunks: ScoredChunk[]
   isLoading: boolean
+  providerLabel: string
+  model: string
 }
 
 const VERDICT_STYLES: Record<RelevanceVerdict, string> = {
@@ -19,13 +21,16 @@ const VERDICT_BADGES: Record<RelevanceVerdict, { label: string; cls: string }> =
   IRRELEVANT: { label: 'NON PERTINENT', cls: 'bg-red-100 text-red-700 border-red-300' },
 }
 
-export function SelfRagRelevance({ chunks, results, filteredChunks, isLoading }: Props) {
+export function SelfRagRelevance({ chunks, results, filteredChunks, isLoading, providerLabel, model }: Props) {
   const resultMap = new Map(results.map((r) => [r.chunkId, r]))
   const resolvedCount = results.length
   const total = chunks.length
 
   return (
     <div className="space-y-3">
+      <p className="text-xs text-gray-500">
+        {providerLabel} · Modèle : <span className="font-mono">{model}</span>
+      </p>
       <p className="text-xs text-gray-500">
         Le LLM évalue la pertinence de chaque chunk pour répondre à la question.
         {isLoading && ` Évaluation en cours… (${resolvedCount}/${total})`}

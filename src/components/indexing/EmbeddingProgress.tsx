@@ -3,6 +3,8 @@ import { MiniVector } from '../shared/MiniVector'
 
 interface Props {
   statuses: ChunkEmbeddingStatus[]
+  providerLabel: string
+  model: string
 }
 
 const STATUS_ICON: Record<ChunkEmbeddingStatus['status'], string> = {
@@ -19,13 +21,15 @@ const STATUS_COLOR: Record<ChunkEmbeddingStatus['status'], string> = {
   error: 'text-red-600',
 }
 
-export function EmbeddingProgress({ statuses }: Props) {
+export function EmbeddingProgress({ statuses, providerLabel, model }: Props) {
   const done = statuses.filter((s) => s.status === 'done').length
 
   return (
     <div className="space-y-2">
       <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
-        <span>Appels API OpenAI (text-embedding-3-small)</span>
+        <span>
+          Appels API {providerLabel} (<span className="font-mono">{model}</span>)
+        </span>
         <span className="font-mono font-bold text-blue-600">
           {done} / {statuses.length}
         </span>
@@ -66,7 +70,7 @@ export function EmbeddingProgress({ statuses }: Props) {
               {s.status === 'done' && s.vector && (
                 <div className="mt-1.5">
                   <span className="text-gray-400">
-                    Vecteur (1536 dim) — aperçu des 24 premières :
+                    Vecteur ({s.vector.length} dim) — aperçu des 24 premières :
                   </span>
                   <div className="mt-1">
                     <MiniVector vector={s.vector} dims={24} />

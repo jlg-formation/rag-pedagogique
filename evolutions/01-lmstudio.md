@@ -1,0 +1,1 @@
+Bon, alors actuellement, j'ai l'impression que le rag-pedagogique ne fonctionne qu'avec OpenAI. J'aimerais qu'il puisse fonctionner aussi avec LM Studio. 

@@ -6,9 +6,11 @@ import type {
   ChunkRelevanceResult,
   FaithfulnessResult,
 } from '../types'
+import type { ProviderConfig } from './settingsStore'
 
 interface QueryState {
   step: QueryStep
+  config: ProviderConfig | null
   query: string
   queryVector: Float32Array | null
   allScores: { chunkId: number; score: number; text: string }[]
@@ -21,6 +23,7 @@ interface QueryState {
   allEmbeddings: EmbeddingRecord[]
 
   setStep: (step: QueryStep) => void
+  setConfig: (config: ProviderConfig) => void
   setQuery: (query: string) => void
   setQueryVector: (vector: Float32Array) => void
   setAllEmbeddings: (embeddings: EmbeddingRecord[]) => void
@@ -36,6 +39,7 @@ interface QueryState {
 
 export const useQueryStore = create<QueryState>()((set) => ({
   step: 'IDLE',
+  config: null,
   query: '',
   queryVector: null,
   allScores: [],
@@ -48,6 +52,7 @@ export const useQueryStore = create<QueryState>()((set) => ({
   allEmbeddings: [],
 
   setStep: (step) => set({ step }),
+  setConfig: (config) => set({ config }),
   setQuery: (query) => set({ query }),
   setQueryVector: (queryVector) => set({ queryVector }),
   setAllEmbeddings: (allEmbeddings) => set({ allEmbeddings }),

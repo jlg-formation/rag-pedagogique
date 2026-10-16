@@ -1,4 +1,4 @@
-import { useSettingsStore } from '../stores/settingsStore'
+import { useSettingsStore, getActiveConfig } from '../stores/settingsStore'
 import { useIndexingStore } from '../stores/indexingStore'
 import { splitIntoChunks } from '../services/chunker'
 import { createEmbedding } from '../services/openai'
@@ -11,7 +11,6 @@ import {
 import type { ChunkingConfig } from '../types'
 
 export function useIndexingPipeline() {
-  const { apiKey } = useSettingsStore()
   const store = useIndexingStore()
 
   async function startIndexing(
@@ -19,7 +18,9 @@ export function useIndexingPipeline() {
     docName: string,
     config: ChunkingConfig,
   ) {
+    const aiConfig = getActiveConfig(useSettingsStore.getState())
     store.reset()
+    store.setConfig(aiConfig)
     store.setSource(text, docName)
     store.setStep('CHUNKING')
 
@@ -48,12 +49,12 @@ export function useIndexingPipeline() {
     for (const chunk of chunkRecords) {
       store.updateEmbeddingStatus(chunk.id!, 'loading')
       try {
-        const vector = await createEmbedding(chunk.text, apiKey)
+        const vector = await createEmbedding(chunk.text, aiConfig)
         await saveEmbedding({
           chunkId: chunk.id!,
           documentId: docId,
           vector,
-          model: 'text-embedding-3-small',
+          model: aiConfig.embeddingModel,
           createdAt: Date.now(),
         })
         await markChunkEmbedded(chunk.id!)

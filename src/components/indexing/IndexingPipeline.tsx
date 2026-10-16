@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useIndexingStore } from '../../stores/indexingStore'
 import { useIndexingPipeline } from '../../hooks/useIndexingPipeline'
-import { useSettingsStore } from '../../stores/settingsStore'
+import { useSettingsStore, isConfigured } from '../../stores/settingsStore'
 import { DocumentInput } from './DocumentInput'
 import { ChunkingConfigPanel } from './ChunkingConfig'
 import { ChunkVisualizer } from './ChunkVisualizer'
@@ -26,7 +26,7 @@ function stepStatus(
 const STEPS = ['IDLE', 'CHUNKING', 'CHUNKED', 'EMBEDDING', 'DONE', 'ERROR']
 
 export function IndexingPipeline() {
-  const { apiKey } = useSettingsStore()
+  const configured = useSettingsStore(isConfigured)
   const { startIndexing } = useIndexingPipeline()
   const store = useIndexingStore()
   const [config, setConfig] = useState<ChunkingConfig>({
@@ -51,8 +51,8 @@ export function IndexingPipeline() {
   const isRunning = ['CHUNKING', 'CHUNKED', 'EMBEDDING'].includes(store.step)
 
   async function handleSubmit(text: string, name: string) {
-    if (!apiKey) {
-      alert('Veuillez configurer votre clé API OpenAI dans les paramètres.')
+    if (!configured) {
+      alert('Veuillez configurer le fournisseur IA dans les paramètres.')
       return
     }
     await startIndexing(text, name, config)
@@ -94,7 +94,11 @@ export function IndexingPipeline() {
         {/* Step 2: Embeddings */}
         <PipelineStep number={2} title="Génération des embeddings" status={embStep}>
           {store.embeddingStatuses.length > 0 && (
-            <EmbeddingProgress statuses={store.embeddingStatuses} />
+            <EmbeddingProgress
+              statuses={store.embeddingStatuses}
+              providerLabel={store.config?.label ?? ''}
+              model={store.config?.embeddingModel ?? ''}
+            />
           )}
         </PipelineStep>
 

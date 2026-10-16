@@ -1,4 +1,4 @@
-import { useSettingsStore } from '../stores/settingsStore'
+import { useSettingsStore, getActiveConfig } from '../stores/settingsStore'
 import { useQueryStore } from '../stores/queryStore'
 import { createEmbedding, streamChatCompletion, chatCompletion } from '../services/openai'
 import {
@@ -108,18 +108,20 @@ function parseFaithfulnessVerdict(raw: string): { verdict: FaithfulnessVerdict; 
 }
 
 export function useQueryPipeline() {
-  const { apiKey, chatModel, topK, selfRagEnabled } = useSettingsStore()
+  const { topK, selfRagEnabled } = useSettingsStore()
   const store = useQueryStore()
 
   async function startQuery(question: string) {
+    const aiConfig = getActiveConfig(useSettingsStore.getState())
     store.reset()
+    store.setConfig(aiConfig)
     store.setQuery(question)
 
     // Step 1 — embed the query
     store.setStep('EMBEDDING_QUERY')
     let queryVector: Float32Array
     try {
-      queryVector = await createEmbedding(question, apiKey)
+      queryVector = await createEmbedding(question, aiConfig)
     } catch (err) {
       store.setError(`Erreur embedding de la question : ${String(err)}`)
       return
@@ -180,8 +182,7 @@ export function useQueryPipeline() {
           try {
             const raw = await chatCompletion(
               buildRelevanceMessages(question, sc.chunk.text),
-              apiKey,
-              chatModel,
+              aiConfig,
             )
             const { verdict, reasoning } = parseRelevanceVerdict(raw)
             store.addRelevanceResult({ chunkId: sc.chunk.id!, verdict, reasoning })
@@ -227,11 +228,7 @@ export function useQueryPipeline() {
     ]
 
     try {
-      for await (const token of streamChatCompletion(
-        messages,
-        apiKey,
-        chatModel,
-      )) {
+      for await (const token of streamChatCompletion(messages, aiConfig)) {
         store.appendToken(token)
       }
     } catch (err) {
@@ -246,8 +243,7 @@ export function useQueryPipeline() {
       try {
         const raw = await chatCompletion(
           buildFaithfulnessMessages(question, finalResponse, chunksForPrompt),
-          apiKey,
-          chatModel,
+          aiConfig,
         )
         store.setFaithfulnessResult(parseFaithfulnessVerdict(raw))
       } catch {

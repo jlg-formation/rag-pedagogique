@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import type { IndexingStep, ChunkRecord, ChunkEmbeddingStatus } from '../types'
+import type { ProviderConfig } from './settingsStore'
 
 interface IndexingState {
   step: IndexingStep
+  config: ProviderConfig | null
   sourceText: string
   docName: string
   chunks: ChunkRecord[]
@@ -11,6 +13,7 @@ interface IndexingState {
   totalIndexed: number
 
   setStep: (step: IndexingStep) => void
+  setConfig: (config: ProviderConfig) => void
   setSource: (text: string, name: string) => void
   setChunks: (chunks: ChunkRecord[]) => void
   initEmbeddingStatuses: (chunks: ChunkRecord[]) => void
@@ -28,6 +31,7 @@ interface IndexingState {
 
 export const useIndexingStore = create<IndexingState>()((set) => ({
   step: 'IDLE',
+  config: null,
   sourceText: '',
   docName: '',
   chunks: [],
@@ -36,6 +40,7 @@ export const useIndexingStore = create<IndexingState>()((set) => ({
   totalIndexed: 0,
 
   setStep: (step) => set({ step }),
+  setConfig: (config) => set({ config }),
   setSource: (sourceText, docName) => set({ sourceText, docName }),
   setChunks: (chunks) => set({ chunks }),
   initEmbeddingStatuses: (chunks) =>

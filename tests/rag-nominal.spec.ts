@@ -4,27 +4,33 @@
  *   2. Indexer un document (chunking + embeddings mockés)
  *   3. Poser une question et obtenir une réponse (embeddings + chat mockés)
  *
- * Les appels réseau vers api.openai.com sont interceptés par Playwright
- * pour éviter toute dépendance à une vraie clé API.
+ * Les appels réseau vers api.openai.com et LM Studio (localhost:1234) sont
+ * interceptés par Playwright pour éviter toute dépendance à un vrai serveur.
  */
 
 import { test, expect, type Page, type Route } from '@playwright/test'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-/** Retourne un vecteur Float32Array de dimension 1536 sérialisé en tableau JSON. */
-function fakeEmbedding(): number[] {
-  const vec = new Array<number>(1536).fill(0)
+const OPENAI_URL = 'https://api.openai.com/v1'
+const LM_URL = 'http://localhost:1234/v1'
+const LM_CHAT_MODEL = 'qwen2.5-7b-instruct'
+const LM_EMBED_MODEL = 'text-embedding-nomic-embed-text-v1.5'
+const CORS = { 'Access-Control-Allow-Origin': '*' }
+
+/** Vecteur de dimension `dims` sérialisé en tableau JSON. */
+function fakeEmbedding(dims: number): number[] {
+  const vec = new Array<number>(dims).fill(0)
   vec[0] = 1 // non-nul pour que la similarité cosinus soit définie
   return vec
 }
 
 /** Corps de réponse JSON pour /v1/embeddings. */
-function embeddingResponse() {
+function embeddingResponse(dims: number, model: string) {
   return {
     object: 'list',
-    data: [{ object: 'embedding', index: 0, embedding: fakeEmbedding() }],
-    model: 'text-embedding-3-small',
+    data: [{ object: 'embedding', index: 0, embedding: fakeEmbedding(dims) }],
+    model,
     usage: { prompt_tokens: 10, total_tokens: 10 },
   }
 }
@@ -53,26 +59,85 @@ function streamingChatResponse(): string {
   return lines.join('\n') + '\n'
 }
 
-/** Intercepte tous les appels OpenAI pour la durée du test. */
-async function mockOpenAI(page: Page) {
-  await page.route('https://api.openai.com/v1/embeddings', (route: Route) => {
+/** Intercepte embeddings + chat d'un serveur compatible OpenAI. */
+async function mockChatAndEmbeddings(
+  page: Page,
+  baseUrl: string,
+  dims: number,
+  embedModel: string,
+) {
+  await page.route(`${baseUrl}/embeddings`, (route: Route) => {
     route.fulfill({
       status: 200,
+      headers: CORS,
       contentType: 'application/json',
-      body: JSON.stringify(embeddingResponse()),
+      body: JSON.stringify(embeddingResponse(dims, embedModel)),
     })
   })
 
-  await page.route(
-    'https://api.openai.com/v1/chat/completions',
-    (route: Route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'text/event-stream',
-        body: streamingChatResponse(),
-      })
-    },
+  await page.route(`${baseUrl}/chat/completions`, (route: Route) => {
+    route.fulfill({
+      status: 200,
+      headers: CORS,
+      contentType: 'text/event-stream',
+      body: streamingChatResponse(),
+    })
+  })
+}
+
+async function mockOpenAI(page: Page) {
+  await mockChatAndEmbeddings(page, OPENAI_URL, 1536, 'text-embedding-3-small')
+}
+
+async function mockLmStudio(page: Page) {
+  await page.route(`${LM_URL}/models`, (route: Route) => {
+    route.fulfill({
+      status: 200,
+      headers: CORS,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        object: 'list',
+        data: [{ id: LM_CHAT_MODEL }, { id: LM_EMBED_MODEL }],
+      }),
+    })
+  })
+  await mockChatAndEmbeddings(page, LM_URL, 768, LM_EMBED_MODEL)
+}
+
+/** Vide le stockage une seule fois par onglet, pour survivre aux rechargements. */
+async function resetStorageOnce(page: Page) {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('test-initialized')) return
+    sessionStorage.setItem('test-initialized', '1')
+    localStorage.clear()
+    indexedDB.deleteDatabase('rag-pedagogique-db')
+  })
+}
+
+async function countDocuments(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const req = indexedDB.open('rag-pedagogique-db')
+        req.onerror = () => reject(req.error)
+        req.onsuccess = () => {
+          const db = req.result
+          const count = db.transaction('documents').objectStore('documents').count()
+          count.onsuccess = () => {
+            resolve(count.result)
+            db.close()
+          }
+        }
+      }),
   )
+}
+
+async function indexSampleDocument(page: Page) {
+  await page.locator('textarea').fill(SAMPLE_TEXT)
+  await page.locator('button', { hasText: 'Indexer le document' }).click()
+  await expect(page.locator('text=Document indexé avec succès')).toBeVisible({
+    timeout: 15_000,
+  })
 }
 
 const SAMPLE_TEXT = `
@@ -95,11 +160,7 @@ injectés dans le prompt envoyé au LLM, qui génère la réponse finale.
 
 test.describe('Scénario nominal RAG', () => {
   test.beforeEach(async ({ page }) => {
-    // Vider IndexedDB et localStorage entre chaque test
-    await page.addInitScript(() => {
-      localStorage.clear()
-      indexedDB.deleteDatabase('rag-pedagogique-db')
-    })
+    await resetStorageOnce(page)
     await mockOpenAI(page)
   })
 
@@ -114,9 +175,9 @@ test.describe('Scénario nominal RAG', () => {
     await page.locator('input[placeholder="sk-..."]').fill('sk-test-fake-key')
     await page.locator('button', { hasText: 'Enregistrer' }).click()
 
-    // La modal se ferme et le bandeau indique "API configurée"
+    // La modal se ferme et le bandeau indique le fournisseur configuré
     await expect(modal).not.toBeVisible()
-    await expect(page.locator('text=API configurée')).toBeVisible()
+    await expect(page.locator('text=OpenAI configuré')).toBeVisible()
   })
 
   test('2 – Indexation d\'un document', async ({ page }) => {
@@ -190,5 +251,107 @@ test.describe('Scénario nominal RAG', () => {
     await expect(page.locator('text=Le RAG est une technique')).toBeVisible({
       timeout: 15_000,
     })
+  })
+})
+
+test.describe('Fournisseur LM Studio', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetStorageOnce(page)
+    await mockOpenAI(page)
+  })
+
+  test('4 – Parcours nominal LM Studio sans clé OpenAI', async ({ page }) => {
+    await mockLmStudio(page)
+    await page.goto('./')
+
+    // Sélection du fournisseur : les modèles se chargent automatiquement
+    await page.getByText('LM Studio', { exact: true }).click()
+    await expect(page.getByTestId('lm-connection-status')).toContainText(
+      '2 modèle(s) disponible(s)',
+    )
+    await expect(page.getByTestId('lm-chat-model')).toHaveValue(LM_CHAT_MODEL)
+    await expect(page.getByTestId('lm-embedding-model')).toHaveValue(LM_EMBED_MODEL)
+
+    await page.locator('button', { hasText: 'Enregistrer' }).click()
+    await expect(page.locator('text=LM Studio configuré')).toBeVisible()
+
+    // Indexation : fournisseur, modèle et dimension réelle affichés
+    await indexSampleDocument(page)
+    await expect(page.getByText('Appels API LM Studio')).toBeVisible()
+    await expect(page.getByText(LM_EMBED_MODEL).first()).toBeVisible()
+    await expect(page.getByText('Vecteur (768 dim)').first()).toBeVisible()
+
+    // Requête + réponse streamée
+    await page.locator('text=💬 Requête').click()
+    await page
+      .locator('input[placeholder*="Qu\'est-ce que le RAG"]')
+      .fill("Qu'est-ce que le RAG ?")
+    await page.locator('button', { hasText: '🔍 Chercher' }).click()
+    await expect(page.locator('text=Le RAG est une technique')).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByText(LM_CHAT_MODEL)).toBeVisible()
+  })
+
+  test('5 – Tester la connexion : succès', async ({ page }) => {
+    await mockLmStudio(page)
+    await page.goto('./')
+    await page.getByText('LM Studio', { exact: true }).click()
+    await page.locator('button', { hasText: 'Tester la connexion' }).click()
+    await expect(page.getByTestId('lm-connection-status')).toContainText(
+      'Connexion réussie',
+    )
+  })
+
+  test('6 – Tester la connexion : serveur injoignable', async ({ page }) => {
+    await page.route(`${LM_URL}/models`, (route) => route.abort('connectionrefused'))
+    await page.goto('./')
+    await page.getByText('LM Studio', { exact: true }).click()
+    await page.locator('button', { hasText: 'Tester la connexion' }).click()
+    await expect(page.getByTestId('lm-connection-status')).toContainText(
+      'Impossible de joindre',
+    )
+    await expect(page.locator('button', { hasText: 'Enregistrer' })).toBeDisabled()
+  })
+
+  test('7 – Changement de fournisseur : index vidé après confirmation', async ({ page }) => {
+    await mockLmStudio(page)
+    await page.addInitScript(() => {
+      localStorage.setItem('openai-api-key', 'sk-test-fake-key')
+    })
+    await page.goto('./')
+    await indexSampleDocument(page)
+    expect(await countDocuments(page)).toBe(1)
+
+    await page.locator('button', { hasText: 'OpenAI configuré' }).click()
+    await page.getByText('LM Studio', { exact: true }).click()
+    await expect(page.getByTestId('lm-embedding-model')).toHaveValue(LM_EMBED_MODEL)
+
+    let dialogMessage = ''
+    page.once('dialog', (dialog) => {
+      dialogMessage = dialog.message()
+      void dialog.accept()
+    })
+    const reloaded = page.waitForEvent('load')
+    await page.locator('button', { hasText: 'Enregistrer' }).click()
+    await reloaded
+
+    await expect(page.locator('text=LM Studio configuré')).toBeVisible()
+    expect(dialogMessage).toContain('vidé')
+    expect(await countDocuments(page)).toBe(0)
+  })
+
+  test('8 – Pas de décalage de mise en page en changeant de fournisseur', async ({ page }) => {
+    await mockLmStudio(page)
+    await page.goto('./')
+    const saveButton = page.locator('button', { hasText: 'Enregistrer' })
+    const before = await saveButton.boundingBox()
+
+    await page.getByText('LM Studio', { exact: true }).click()
+    await expect(page.getByTestId('lm-connection-status')).toContainText('Connexion réussie')
+    expect(await saveButton.boundingBox()).toEqual(before)
+
+    await page.getByText('OpenAI', { exact: true }).click()
+    expect(await saveButton.boundingBox()).toEqual(before)
   })
 })

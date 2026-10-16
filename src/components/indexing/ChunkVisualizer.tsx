@@ -34,7 +34,8 @@ function buildSegments(text: string, chunks: ChunkRecord[]): Segment[] {
       if (t) segments.push({ text: t, chunkIndices: [...active] })
       pos = ev.pos
     }
-    ev.type === 'start' ? active.add(ev.idx) : active.delete(ev.idx)
+    if (ev.type === 'start') active.add(ev.idx)
+    else active.delete(ev.idx)
   }
   if (pos < text.length) {
     segments.push({ text: text.slice(pos), chunkIndices: [] })

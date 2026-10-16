@@ -1,13 +1,18 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import clsx from 'clsx'
-import { useSettingsStore } from '../../stores/settingsStore'
+import {
+  useSettingsStore,
+  isConfigured,
+  PROVIDER_LABELS,
+} from '../../stores/settingsStore'
 import { ApiKeyModal } from '../settings/ApiKeyModal'
 import { clearAllData } from '../../db/client'
 
 export function AppShell() {
-  const { apiKey } = useSettingsStore()
-  const [showSettings, setShowSettings] = useState(!apiKey)
+  const settings = useSettingsStore()
+  const configured = isConfigured(settings)
+  const [showSettings, setShowSettings] = useState(!configured)
   const [clearing, setClearing] = useState(false)
 
   async function handleClear() {
@@ -83,11 +88,13 @@ export function AppShell() {
               <span
                 className={clsx(
                   'h-2 w-2 rounded-full',
-                  apiKey ? 'bg-green-500' : 'bg-red-500',
+                  configured ? 'bg-green-500' : 'bg-red-500',
                 )}
               />
               <span className="text-gray-600">
-                {apiKey ? 'API configurée' : 'Configurer API'}
+                {configured
+                  ? `${PROVIDER_LABELS[settings.provider]} configuré`
+                  : 'Configurer IA'}
               </span>
             </button>
           </div>
